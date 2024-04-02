@@ -47,7 +47,7 @@ y = np.fromfile(Path(filenamey), dtype=np.float32).reshape(timestep, r1)
 z = np.fromfile(Path(filenamez), dtype=np.float32).reshape(timestep, r1)
 
 HOME = str(Path.home())
-draco_exe_folder = HOME + '/code/draco/cmake-build-release'
+draco_exe_folder = HOME + '/code/draco/build/'
 
 for qp in qps:
     total_compressed_size = 0
