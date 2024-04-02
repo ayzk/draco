@@ -228,13 +228,77 @@ void AttributeQuantizationTransform::GeneratePortableAttribute(
   quantizer.Init(range(), max_quantized_value);
   int32_t dst_index = 0;
   const std::unique_ptr<float[]> att_val(new float[num_components]);
-  for (PointIndex i(0); i < num_points; ++i) {
-    const AttributeValueIndex att_val_id = attribute.mapped_index(i);
-    attribute.GetValue(att_val_id, att_val.get());
-    for (int c = 0; c < num_components; ++c) {
-      const float value = (att_val[c] - min_values()[c]);
-      const int32_t q_val = quantizer.QuantizeFloat(value);
-      portable_attribute_data[dst_index++] = q_val;
+
+  const char *draco_psnr = std::getenv("DRACO_PSNR");
+  if (draco_psnr != NULL && strcmp(draco_psnr, "TRUE") == 0) {
+    Dequantizer dequantizer;
+    dequantizer.Init(range(), max_quantized_value);
+    fprintf(stderr, "range=%f, components = %d\n", range(), num_components);
+    double max_abs_err[3] = {0.0, 0.0, 0.0};
+    double err[3] = {0.0, 0.0, 0.0};
+    double dmax[3] = {std::numeric_limits<float>::min(),
+                      std::numeric_limits<float>::min(),
+                      std::numeric_limits<float>::min()};
+    double dmin[3] = {std::numeric_limits<float>::max(),
+                      std::numeric_limits<float>::max(),
+                      std::numeric_limits<float>::max()};
+
+    for (PointIndex i(0); i < num_points; ++i) {
+      const AttributeValueIndex att_val_id = attribute.mapped_index(i);
+      attribute.GetValue(att_val_id, att_val.get());
+      for (int c = 0; c < num_components; ++c) {
+        const float value = (att_val[c] - min_values()[c]);
+        const int32_t q_val = quantizer.QuantizeFloat(value);
+
+        const float value1 =
+            dequantizer.DequantizeFloat(q_val);  // + min_values_[c];
+        double abs_err = std::abs(value1 - value);
+        if (abs_err > max_abs_err[c]) {
+          max_abs_err[c] = abs_err;
+        }
+        if (value + min_values()[c] < dmin[c]) {
+          dmin[c] = value + min_values()[c];
+        }
+        if (value + min_values()[c] > dmax[c]) {
+          dmax[c] = value + min_values()[c];
+        }
+        err[c] += (value1 - value) * (value1 - value);
+        // fprintf(stderr, "x=%f, q=%d, x'=%f\n", att_val[c], q_val, value1);
+
+        portable_attribute_data[dst_index++] = q_val;
+      }
+    }
+    double nrmsex = std::sqrt(err[0] / num_points) / (dmax[0] - dmin[0]);
+    double nrmsey = std::sqrt(err[1] / num_points) / (dmax[1] - dmin[1]);
+    double nrmsez = std::sqrt(err[2] / num_points) / (dmax[2] - dmin[2]);
+    double nrmse =
+        sqrt((nrmsex * nrmsex + nrmsey * nrmsey + nrmsez * nrmsez) / 3);
+    double psnr = -20 * log10(nrmse);
+//    printf("%.5f %.5f %.5f %.5f %.5f %.5f\n", dmax[0], dmax[1], dmax[2],
+//           dmin[0], dmin[1], dmin[2]);
+    printf("X cumulated error = %.8f\n", err[0]);
+    printf("Y cumulated error = %.8f\n", err[1]);
+    printf("Z cumulated error = %.8f\n", err[2]);
+    printf("X Max absolute error = %.8f\n", max_abs_err[0]);
+    printf("Y Max absolute error = %.8f\n", max_abs_err[1]);
+    printf("Z Max absolute error = %.8f\n", max_abs_err[2]);
+    printf("X nrmse = %.8f\n", nrmsex);
+    printf("Y nrmse = %.8f\n", nrmsey);
+    printf("Z nrmse = %.8f\n", nrmsez);
+    printf("X PSNR = %.8f\n", -20 * log10(nrmsex));
+    printf("Y PSNR = %.8f\n", -20 * log10(nrmsey));
+    printf("Z PSNR = %.8f\n", -20 * log10(nrmsez));
+    printf("overall nrmse = %.8f\n", nrmsez);
+    printf("overall PSNR = %.8f\n", psnr);
+  } else {
+    for (PointIndex i(0); i < num_points; ++i) {
+      const AttributeValueIndex att_val_id = attribute.mapped_index(i);
+      attribute.GetValue(att_val_id, att_val.get());
+      for (int c = 0; c < num_components; ++c) {
+        const float value = (att_val[c] - min_values()[c]);
+        const int32_t q_val = quantizer.QuantizeFloat(value);
+        portable_attribute_data[dst_index++] = q_val;
+      }
     }
   }
 }

@@ -114,6 +114,7 @@ int main(int argc, char **argv) {
     }
     pc = std::move(statusor).value();
     timer.Stop();
+    printf("decompression time = %.10f\n", timer.GetInMs()/1000.0);
   }
 
   if (pc == nullptr) {

@@ -167,6 +167,12 @@ int EncodePointCloudToFile(const draco::PointCloud &pc, const std::string &file,
   printf("Encoded point cloud saved to %s (%" PRId64 " ms to encode).\n",
          file.c_str(), timer.GetInMs());
   printf("\nEncoded size = %zu bytes\n\n", buffer.size());
+
+  printf("compression ratio = %.5f\n",
+         pc.num_points() * 4 * 3.0 / buffer.size());
+  printf("compression time = %.10f\n",
+         timer.GetInMs()/1000.0);
+
   return 0;
 }
 
